@@ -1,0 +1,178 @@
+====================================================================
+   DEMO: BDD CON GHERKIN + MUTATION TESTING  -  PASO A PASO
+====================================================================
+
+Ejemplo: retiro de dinero en un cajero automatico (CuentaBancaria).
+- BDD (pytest-bdd): los escenarios estan en tests/features/retiro.feature
+- Mutation Testing (mutmut): rompe a proposito src/cuenta.py y mira
+  si los escenarios se dan cuenta.
+
+
+--------------------------------------------------------------------
+0. REQUISITOS (una sola vez)
+--------------------------------------------------------------------
+- Tener instalado Docker Desktop y ABIERTO
+  (abajo a la izquierda tiene que decir "Engine running").
+- Tener instalado Git (https://git-scm.com).
+
+Todos los comandos de los pasos 1 y 2 se escriben en una terminal
+de Windows (PowerShell, la que empieza con PS C:\...).
+
+
+--------------------------------------------------------------------
+1. DESCARGAR EL PROYECTO (una sola vez)
+--------------------------------------------------------------------
+git clone https://github.com/Alejo13007/demo-bdd-mutation-testing.git
+cd demo-bdd-mutation-testing
+
+
+--------------------------------------------------------------------
+2. LEVANTAR EL CONTENEDOR
+--------------------------------------------------------------------
+docker compose run --rm demo
+
+- La primera vez tarda 1 a 3 minutos (descarga Python e instala
+  pytest, pytest-bdd y mutmut). Las siguientes veces es inmediato.
+- Cuando termina aparece algo como:  root@a1b2c3d4:/app#
+  Eso significa que ya estas ADENTRO del contenedor.
+
+A partir de aca, todos los comandos se escriben dentro del contenedor.
+
+
+--------------------------------------------------------------------
+3. CORRER LAS PRUEBAS BDD
+--------------------------------------------------------------------
+pytest -v
+
+RESULTADO ESPERADO:  3 passed
+  - Retiro exitoso cuando hay saldo suficiente ......... PASSED
+  - Rechazo de retiro por saldo insuficiente ........... PASSED
+  - Retiro por el monto exacto del saldo disponible .... PASSED
+
+Todo en verde... pero, las pruebas son realmente buenas?
+
+
+--------------------------------------------------------------------
+4. CORRER MUTATION TESTING
+--------------------------------------------------------------------
+rm -rf mutants
+mutmut run
+
+IMPORTANTE: siempre correr "rm -rf mutants" antes de "mutmut run".
+Esa carpeta guarda resultados viejos; si no se borra, mutmut puede
+mostrar el resultado anterior sin volver a probar.
+
+RESULTADO ESPERADO:  12/12   (eliminados) 8   (sobrevivientes) 4
+  Puntuacion de mutacion = 8 / 12 = 66%
+
+
+--------------------------------------------------------------------
+5. VER LOS MUTANTES QUE SOBREVIVIERON
+--------------------------------------------------------------------
+mutmut results
+
+RESULTADO ESPERADO:
+  cuenta.xǁCuentaBancariaǁretirar__mutmut_1: survived
+  cuenta.xǁCuentaBancariaǁretirar__mutmut_2: survived
+  cuenta.xǁCuentaBancariaǁretirar__mutmut_3: survived
+  cuenta.xǁCuentaBancariaǁretirar__mutmut_4: survived
+
+Para ver que cambio un mutante (COPIAR el nombre de la lista,
+no escribirlo a mano porque tiene el simbolo ǁ):
+
+mutmut show 'cuenta.xǁCuentaBancariaǁretirar__mutmut_1'
+
+QUE CAMBIO CADA MUTANTE (codigo original: if monto <= 0: return "MONTO_INVALIDO")
+  Mutante 1:  monto <= 0   ->  monto < 0     (retirar 0 pesos se permite)
+  Mutante 2:  monto <= 0   ->  monto <= 1    (retirar 1 peso se rechaza)
+  Mutante 3:  "MONTO_INVALIDO" -> "XXMONTO_INVALIDOXX"
+  Mutante 4:  "MONTO_INVALIDO" -> "monto_invalido"
+
+POR QUE SOBREVIVEN: ningun escenario prueba retirar 0 pesos ni un
+monto chico. Esa regla del codigo nunca se pone a prueba.
+
+
+--------------------------------------------------------------------
+6. SOLUCION: AGREGAR ESCENARIOS EN GHERKIN
+--------------------------------------------------------------------
+Abrir en VS Code el archivo:  tests/features/retiro.feature
+
+Ir al FINAL del archivo, dejar una linea en blanco y pegar esto
+(respetando los espacios del principio, igual que los otros escenarios):
+
+  Escenario: Rechazo de retiro con monto cero
+    Dado que el cliente tiene un saldo disponible de 500 pesos
+    Cuando solicita retirar 0 pesos
+    Entonces la operacion es "MONTO_INVALIDO"
+    Y el nuevo saldo disponible es de 500 pesos
+
+  Escenario: Retiro del monto mínimo
+    Dado que el cliente tiene un saldo disponible de 500 pesos
+    Cuando solicita retirar 1 pesos
+    Entonces la operacion es "RETIRO_EXITOSO"
+    Y el nuevo saldo disponible es de 499 pesos
+
+Guardar con Ctrl + S.
+(No hace falta salir del contenedor: el contenedor ve el cambio al instante.)
+
+- El escenario "monto cero" mata a los mutantes 1, 3 y 4.
+- El escenario "monto minimo" mata al mutante 2.
+
+
+--------------------------------------------------------------------
+7. VOLVER A CORRER TODO
+--------------------------------------------------------------------
+pytest -v
+
+RESULTADO ESPERADO:  5 passed
+
+rm -rf mutants
+mutmut run
+
+RESULTADO ESPERADO:  12/12   (eliminados) 12   (sobrevivientes) 0
+  Puntuacion de mutacion = 12 / 12 = 100%
+
+
+--------------------------------------------------------------------
+8. SALIR DEL CONTENEDOR
+--------------------------------------------------------------------
+exit
+
+
+--------------------------------------------------------------------
+9. VOLVER LA DEMO AL ESTADO INICIAL (para repetirla)
+--------------------------------------------------------------------
+Fuera del contenedor (en PowerShell), dentro de la carpeta del proyecto:
+
+git checkout tests/features/retiro.feature
+
+Esto borra los 2 escenarios agregados y deja el archivo como al
+principio (3 escenarios, 8 eliminados y 4 sobrevivientes).
+
+
+--------------------------------------------------------------------
+RESUMEN RAPIDO DE COMANDOS
+--------------------------------------------------------------------
+git clone https://github.com/Alejo13007/demo-bdd-mutation-testing.git
+cd demo-bdd-mutation-testing
+docker compose run --rm demo
+pytest -v
+rm -rf mutants
+mutmut run
+mutmut results
+   -> agregar los 2 escenarios en tests/features/retiro.feature
+pytest -v
+rm -rf mutants
+mutmut run
+exit
+
+
+====================================================================
+CONCLUSION
+====================================================================
+BDD define QUE tiene que hacer el sistema (escenarios en Gherkin).
+Mutation Testing comprueba que esos escenarios REALMENTE lo controlen.
+Las pruebas pasaban en verde (3 de 3), pero mutmut encontro 4 errores
+que no detectaban. Se corrigio escribiendo 2 escenarios nuevos en
+Gherkin y la puntuacion paso de 66% a 100%.
+====================================================================
