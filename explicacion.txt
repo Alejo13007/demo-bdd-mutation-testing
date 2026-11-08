@@ -1,0 +1,65 @@
+====================================================================
+           EXPLICACIÓN DE LA DEMOSTRACIÓN: BDD & MUTATION TESTING
+====================================================================
+
+1. ¿QUÉ HACE ESTA DEMO?
+--------------------------------------------------------------------
+Esta aplicación simula las operaciones principales de una Cuenta Bancaria
+(específicamente la funcionalidad de retiro de dinero) para demostrar 
+dos técnicas avanzadas de calidad de software:
+
+  1. Behavior-Driven Development (BDD) con pytest-bdd.
+  2. Mutation Testing (Pruebas de Mutación) con mutmut.
+
+El objetivo es enseñar cómo escribir pruebas basadas en especificaciones de 
+negocio comprensibles por el usuario y cómo medir cuantitativamente la 
+efectividad real de dichas pruebas mediante la inyección deliberada de errores.
+
+
+2. LÓGICA DE NEGOCIO (src/cuenta.py)
+--------------------------------------------------------------------
+La clase `CuentaBancaria` gestiona un saldo inicial y expone el método 
+`retirar(monto)`, aplicando tres reglas de negocio fundamentales:
+
+  * Regla 1 (Monto Inválido): Si el monto a retirar es menor o igual a 0, 
+    devuelve la respuesta "MONTO_INVALIDO".
+  * Regla 2 (Saldo Insuficiente): Si el monto a retirar supera el saldo 
+    disponible (monto > saldo), la operación se rechaza y devuelve 
+    "SALDO_INSUFFICIENT".
+  * Regla 3 (Retiro Exitoso): Si hay saldo suficiente, se descuenta el 
+    monto del saldo y se devuelve "RETIRO_EXITOSO".
+
+
+3. CÓMO FUNCIONA EL BDD (features/retiro.feature + tests/test_retiro.py)
+--------------------------------------------------------------------
+En lugar de escribir pruebas unitarias tradicionales, los requerimientos 
+se redactaron en lenguaje natural (Gherkin en español) dentro del archivo 
+`retiro.feature`:
+
+  * Escenario 1: Retiro exitoso cuando hay saldo suficiente (Ej. 1000 - 300 = 700).
+  * Escenario 2: Rechazo de retiro por saldo insuficiente (Ej. 500 - 600 -> Saldo insuficiente).
+  * Escenario 3 (Caso de Borde @limite): Retiro por el monto exacto disponible 
+    (Ej. 500 - 500 = 0).
+
+`pytest-bdd` conecta directamente estas frases escritas en español con funciones 
+de Python en `test_retiro.py`, asegurando que el sistema se compense exactamente 
+como el negocio lo exige.
+
+
+4. CÓMO FUNCIONA EL MUTATION TESTING (mutmut)
+--------------------------------------------------------------------
+Mutation Testing evalúa qué tan buenas son nuestras pruebas. `mutmut` analiza 
+el código de `src/cuenta.py` e introduce pequeñas fallas artificiales ("mutantes"), 
+tales como:
+
+  * Cambiar un operador mayor que (>) por mayor o igual (>=).
+  * Cambiar una resta (-=) por una suma (+=).
+  * Alterar condiciones de borde o retornos de texto.
+
+Luego, `mutmut` ejecuta los tests BDD contra cada versión "mutada":
+
+  * Mutante Eliminado (Killed): Si las pruebas fallan tras el cambio, significa 
+    que nuestras pruebas son sólidas y detectan errores.
+  * Mutante Sobreviviente (Survived): Si las pruebas pasan a pesar del error 
+    inyectado, revela una falta de cobertura o de aserciones en los casos de borde.
+
